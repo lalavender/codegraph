@@ -324,6 +324,11 @@ describe('Language Support', () => {
     expect(languages).toContain('dart');
     expect(languages).toContain('solidity');
     expect(languages).toContain('nix');
+    expect(languages).toContain('yh');
+  });
+
+  it('should detect yh files', () => {
+    expect(detectLanguage('main.yh')).toBe('yh');
   });
 });
 
@@ -463,6 +468,51 @@ in
     expect(node('package')?.isExported).toBe(true);
     expect(node('privateNested')?.isExported).toBe(false);
     expect(node('licenses')?.isExported).toBe(true);
+  });
+});
+
+describe('Yh Extraction', () => {
+  it('extracts functions, structs, enums, consts, imports and calls', () => {
+    const code = `
+module demo;
+
+import std.io as io;
+
+pub struct Point { x int; y int; }
+
+pub enum Color { Red; Green = 2; }
+
+pub type Handle = *void;
+
+pub const MAX int = 10;
+
+let global int = 0;
+
+pub fn scale(p Point, k int) int {
+    let acc int = p.x + p.y;
+    if (acc > 0) { return acc * k; }
+    return foo(acc);
+}
+
+pub fn main() int {
+    let p Point = Point{ x: 1, y: 2 };
+    io.printf("%d\n", p.x);
+    return scale(p, 2);
+}
+`;
+    const result = extractFromSource('main.yh', code);
+    const kinds = [...new Set(result.nodes.map((n) => n.kind))];
+    expect(result.nodes.find((n) => n.kind === 'function' && n.name === 'scale')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'function' && n.name === 'main')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'struct' && n.name === 'Point')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'enum' && n.name === 'Color')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'constant' && n.name === 'MAX')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'variable' && n.name === 'global')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'type_alias' && n.name === 'Handle')).toBeDefined();
+    expect(result.nodes.find((n) => n.kind === 'import')).toBeDefined();
+    const calls = result.unresolvedReferences.filter((r) => r.referenceKind === 'calls').map((r) => r.referenceName);
+    expect(calls).toContain('foo');
+    expect(calls).toContain('scale');
   });
 });
 
